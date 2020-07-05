@@ -38,6 +38,9 @@ const char* GetTxnOutputType(txnouttype t)
     case TX_WITNESS_V0_KEYHASH: return "witness_v0_keyhash";
     case TX_WITNESS_V0_SCRIPTHASH: return "witness_v0_scripthash";
     case TX_WITNESS_UNKNOWN: return "witness_unknown";
+    case TX_ZEROCOINMINT: return "zerocoinmint";
+    case TX_CONDITIONAL_STAKE: return "conditional_stake";
+    case TX_SIGMAMINT: return "sigmamint";
     }
     return nullptr;
 }
@@ -88,7 +91,7 @@ static bool MatchMultisig(const CScript& script, unsigned int& required, std::ve
     return (it + 1 == script.end());
 }
 
-txnouttype Solver(const CScript& scriptPubKey, std::vector<std::vector<unsigned char>>& vSolutionsRet)
+txnouttype Solver(const CScript& scriptPubKey, std::vector<std::vector<unsigned char>>& vSolutionsRet, bool isCoinstake)
 {
     vSolutionsRet.clear();
 
@@ -103,7 +106,7 @@ txnouttype Solver(const CScript& scriptPubKey, std::vector<std::vector<unsigned 
 
     int witnessversion;
     std::vector<unsigned char> witnessprogram;
-    if (scriptPubKey.IsWitnessProgram(witnessversion, witnessprogram)) {
+    if (scriptPubKey.IsWitnessProgram(witnessversion, witnessprogram, isCoinstake)) {
         if (witnessversion == 0 && witnessprogram.size() == WITNESS_V0_KEYHASH_SIZE) {
             vSolutionsRet.push_back(witnessprogram);
             return TX_WITNESS_V0_KEYHASH;
@@ -118,6 +121,24 @@ txnouttype Solver(const CScript& scriptPubKey, std::vector<std::vector<unsigned 
             return TX_WITNESS_UNKNOWN;
         }
         return TX_NONSTANDARD;
+    }
+
+    // Zerocoin
+    if (scriptPubKey.IsZerocoinMint())
+    {
+        if(scriptPubKey.size() > 150) return false;
+        std::vector<unsigned char> hashBytes(scriptPubKey.begin()+2, scriptPubKey.end());
+        vSolutionsRet.push_back(hashBytes);
+        return true;
+    }
+
+    // Sigma
+    if (scriptPubKey.IsSigmaMint())
+    {
+        if(scriptPubKey.size() > 37) return false;
+        std::vector<unsigned char> hashBytes(scriptPubKey.begin()+1, scriptPubKey.end());
+        vSolutionsRet.push_back(hashBytes);
+        return true;
     }
 
     // Provably prunable, data-carrying output
@@ -156,7 +177,18 @@ txnouttype Solver(const CScript& scriptPubKey, std::vector<std::vector<unsigned 
 bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet)
 {
     std::vector<valtype> vSolutions;
-    txnouttype whichType = Solver(scriptPubKey, vSolutions);
+    txnouttype whichType = Solver(scriptPubKey, vSolutions, false);
+
+
+    if (HasIsCoinstakeOp(scriptPubKey))
+    {
+        CScript scriptB;
+        if (!GetNonCoinstakeScriptPath(scriptPubKey, scriptB))
+            return false;
+
+        // Return only the spending address
+        return ExtractDestination(scriptB, addressRet);
+    }
 
     if (whichType == TX_PUBKEY) {
         CPubKey pubKey(vSolutions[0]);
@@ -208,6 +240,18 @@ bool ExtractDestinations(const CScript& scriptPubKey, txnouttype& typeRet, std::
         // This is data, not addresses
         return false;
     }
+
+    if (HasIsCoinstakeOp(scriptPubKey))
+      {
+          CScript scriptB;
+          if (!GetNonCoinstakeScriptPath(scriptPubKey, scriptB))
+              return false;
+
+          // Return only the spending address to keep insight working
+          ExtractDestinations(scriptB, typeRet, addressRet, nRequiredRet);
+
+          return true;
+      }
 
     if (typeRet == TX_MULTISIG)
     {
@@ -324,4 +368,43 @@ CScript GetScriptForWitness(const CScript& redeemscript)
 
 bool IsValidDestination(const CTxDestination& dest) {
     return dest.which() != 0;
+}
+
+
+bool ExtractStakingKeyID(const CScript &scriptPubKey, CScriptID &scriptID, WitnessV0KeyHash &witnessKeyID)
+{
+    if (scriptPubKey.IsPayToScriptHash())
+    {
+        scriptID = CScriptID(uint160(&scriptPubKey[2], 20));
+        return true;
+    }
+    else if (scriptPubKey.MatchPayToWitnessKeyHash(0))
+    {
+        //to check for ownership
+        CScript wit_script = GetScriptForDestination(WitnessV0KeyHash(uint160(&scriptPubKey[2], 20)));
+        scriptID = CScriptID(wit_script);
+        //to receive payout
+        witnessKeyID = WitnessV0KeyHash(uint160(&scriptPubKey[2], 20));
+        return true;
+    }
+    else if (scriptPubKey.IsPayToScriptHash_CS())
+    {
+        //p2sh
+        if(scriptPubKey.MatchPayToScriptHash(2)){
+            scriptID = CScriptID(uint160(&scriptPubKey[4], 20));
+            return true;
+        }
+
+    }
+    else if (scriptPubKey.IsPayToWitnessKeyHash_CS()){
+        //p2wkh
+        if(scriptPubKey.MatchPayToWitnessKeyHash(2)){
+            CScript wit_script = GetScriptForDestination(WitnessV0KeyHash(uint160(&scriptPubKey[4], 20)));
+            CScriptID wit_id(wit_script);
+            scriptID = wit_id;
+            return true;
+        }
+    }
+
+    return false;
 }

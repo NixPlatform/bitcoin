@@ -64,6 +64,10 @@ enum txnouttype
     TX_WITNESS_V0_SCRIPTHASH,
     TX_WITNESS_V0_KEYHASH,
     TX_WITNESS_UNKNOWN, //!< Only for Witness versions not already defined above
+
+    TX_ZEROCOINMINT,
+    TX_CONDITIONAL_STAKE,
+    TX_SIGMAMINT,
 };
 
 class CNoDestination {
@@ -158,7 +162,7 @@ const char* GetTxnOutputType(txnouttype t);
  * @param[out]  vSolutionsRet  Vector of parsed pubkeys and hashes
  * @return                     The script type. TX_NONSTANDARD represents a failed solve.
  */
-txnouttype Solver(const CScript& scriptPubKey, std::vector<std::vector<unsigned char>>& vSolutionsRet);
+txnouttype Solver(const CScript& scriptPubKey, std::vector<std::vector<unsigned char>>& vSolutionsRet, bool isCoinstake);
 
 /**
  * Parse a standard scriptPubKey for the destination address. Assigns result to
@@ -180,6 +184,7 @@ bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet)
  * CScript), and its use should be phased out.
  */
 bool ExtractDestinations(const CScript& scriptPubKey, txnouttype& typeRet, std::vector<CTxDestination>& addressRet, int& nRequiredRet);
+bool ExtractStakingKeyID(const CScript &scriptPubKey, CScriptID &scriptID, WitnessV0KeyHash &witnessKeyID);
 
 /**
  * Generate a Bitcoin scriptPubKey for the given CTxDestination. Returns a P2PKH

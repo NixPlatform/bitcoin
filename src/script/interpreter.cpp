@@ -521,6 +521,16 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                     break;
                 }
 
+
+                case OP_ISCOINSTAKE:
+                {
+
+                    opcodetype opbool = checker.IsCoinStake() ? OP_TRUE : OP_FALSE;
+                    CScriptNum bn(opbool);
+                    stack.push_back(bn.getvch());
+                    break;
+                }
+
                 case OP_NOP1: case OP_NOP4: case OP_NOP5:
                 case OP_NOP6: case OP_NOP7: case OP_NOP8: case OP_NOP9: case OP_NOP10:
                 {
@@ -1701,4 +1711,221 @@ size_t CountWitnessSigOps(const CScript& scriptSig, const CScript& scriptPubKey,
     }
 
     return 0;
+}
+
+
+
+// NIX - coldstake / LPoS
+
+
+bool HasIsCoinstakeOp(const CScript &script)
+{
+    CScript::const_iterator pc = script.begin();
+
+    if (pc == script.end())
+        return false;
+
+    opcodetype opcode;
+    valtype vchPushValue;
+
+    if (!script.GetOp(pc, opcode, vchPushValue))
+        return false;
+
+    if (opcode == OP_ISCOINSTAKE)
+        return true;
+
+    return false;
+}
+
+bool GetCoinstakeScriptPath(const CScript &scriptIn, CScript &scriptOut)
+{
+    CScript::const_iterator pc = scriptIn.begin();
+    CScript::const_iterator pend = scriptIn.end();
+    CScript::const_iterator pcStart = pc;
+
+    opcodetype opcode;
+    valtype vchPushValue;
+
+    bool fFoundOp = false;
+    while (pc < pend)
+    {
+        if (!scriptIn.GetOp(pc, opcode, vchPushValue))
+            break;
+
+        if (!fFoundOp
+            && opcode == OP_ISCOINSTAKE)
+        {
+            pc++; // skip over if
+
+            pcStart = pc;
+            fFoundOp = true;
+            continue;
+        }
+
+        if (fFoundOp && opcode == OP_ELSE)
+        {
+            pc--;
+            scriptOut = CScript(pcStart, pc);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool GetNonCoinstakeScriptPath(const CScript &scriptIn, CScript &scriptOut)
+{
+    CScript::const_iterator pc = scriptIn.begin();
+    CScript::const_iterator pend = scriptIn.end();
+    CScript::const_iterator pcStart = pc;
+
+    opcodetype opcode;
+    valtype vchPushValue;
+
+    bool fFoundOp = false;
+    while (pc < pend)
+    {
+        if (!scriptIn.GetOp(pc, opcode, vchPushValue))
+            break;
+
+        if (!fFoundOp
+            && opcode == OP_ELSE)
+        {
+            pcStart = pc;
+            fFoundOp = true;
+            continue;
+        }
+
+        if (fFoundOp && opcode == OP_ENDIF)
+        {
+            pc--;
+            scriptOut = CScript(pcStart, pc);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool GetCoinstakeScriptFee(const CScript &scriptIn, int64_t &feeOut)
+{
+    CScript::const_iterator pc = scriptIn.begin();
+    CScript::const_iterator pend = scriptIn.end();
+    CScript::const_iterator pcStart = pc;
+
+    opcodetype opcode;
+    valtype vchPushValue;
+
+    bool fFoundOp = false;
+    while (pc < pend)
+    {
+        if (!scriptIn.GetOp(pc, opcode, vchPushValue))
+            break;
+
+        if (!fFoundOp&& opcode == OP_ENDIF)
+        {
+            pcStart = pc;
+            fFoundOp = true;
+            continue;
+        }
+        if (fFoundOp && opcode == OP_DROP)
+        {
+            if (!scriptIn.GetOp(pcStart, opcode, vchPushValue))
+                return false;
+            feeOut = CScriptNum(vchPushValue, false).getint();
+            if(feeOut > 10000 || feeOut < 0){
+                return false;
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool GetCoinstakeScriptFeeRewardAddress(const CScript &scriptIn, CScript &scriptOut)
+{
+    CScript::const_iterator pc = scriptIn.begin();
+    CScript::const_iterator pend = scriptIn.end();
+    CScript::const_iterator pcStart = pc;
+
+    opcodetype opcode;
+    valtype vchPushValue;
+
+    bool fFoundOp = false;
+    CScript sOut;
+    if(!GetNonCoinstakeScriptPath(scriptIn, sOut))
+        return false;
+    while (pc < pend)
+    {
+        if (!scriptIn.GetOp(pc, opcode, vchPushValue))
+            break;
+
+        if (!fFoundOp&& opcode == OP_DROP)
+        {
+            pcStart = pc;
+            fFoundOp = true;
+            continue;
+        }
+        if (fFoundOp && opcode == OP_DROP)
+        {
+            if (!scriptIn.GetOp(pcStart, opcode, vchPushValue))
+                return false;
+            //p2sh
+            if(sOut.size() == 23)
+                scriptOut << OP_HASH160 << (vchPushValue) << OP_EQUAL;
+            //p2wkh
+            else if(sOut.size() == 22)
+                scriptOut << OP_0 << (vchPushValue);
+            else
+                return false;
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool SplitConditionalCoinstakeScript(const CScript &scriptIn, CScript &scriptOutA, CScript &scriptOutB)
+{
+    CScript::const_iterator pc = scriptIn.begin();
+    CScript::const_iterator pend = scriptIn.end();
+    CScript::const_iterator pcStart = pc;
+
+    opcodetype opcode;
+    valtype vchPushValue;
+
+    bool fFoundOp = false, fFoundElse = false;
+    while (pc < pend)
+    {
+        if (!scriptIn.GetOp(pc, opcode, vchPushValue))
+            break;
+
+        if (!fFoundOp
+            && opcode == OP_ISCOINSTAKE)
+        {
+            pc++; // skip over if
+
+            pcStart = pc;
+            fFoundOp = true;
+            continue;
+        }
+
+        if (fFoundElse && opcode == OP_ENDIF)
+        {
+            pc--;
+            scriptOutB = CScript(pcStart, pc);
+            return true;
+        }
+
+        if (fFoundOp && opcode == OP_ELSE)
+        {
+            scriptOutA = CScript(pcStart, pc-1);
+            pcStart = pc;
+            fFoundElse = true;
+        }
+    }
+
+    return false;
 }
