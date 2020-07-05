@@ -44,3 +44,4 @@ src/util
 src/wallet
 src/wallet/test
 src/zmq
+.

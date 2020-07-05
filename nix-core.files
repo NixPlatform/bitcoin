@@ -1,5 +1,7 @@
+Makefile.am
 autogen.sh
 configure.ac
+libnixconsensus.pc.in
 src/Makefile
 src/Makefile.am
 src/Makefile.bench.include
