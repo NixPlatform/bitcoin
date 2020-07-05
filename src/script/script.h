@@ -185,9 +185,19 @@ enum opcodetype
     OP_NOP7 = 0xb6,
     OP_NOP8 = 0xb7,
     OP_NOP9 = 0xb8,
+    OP_ISCOINSTAKE = OP_NOP9,
     OP_NOP10 = 0xb9,
 
     OP_INVALIDOPCODE = 0xff,
+
+
+    // zerocoin params
+    OP_ZEROCOINMINT = 0xc1,
+    OP_ZEROCOINSPEND = 0xc2,
+
+    // sigma params
+    OP_SIGMAMINT = 0xc3,
+    OP_SIGMASPEND = 0xc4,
 };
 
 // Maximum value that an opcode can be
@@ -540,7 +550,7 @@ public:
 
     bool IsPayToScriptHash() const;
     bool IsPayToWitnessScriptHash() const;
-    bool IsWitnessProgram(int& version, std::vector<unsigned char>& program) const;
+    bool IsWitnessProgram(int& version, std::vector<unsigned char>& program, bool isCoinstake = false) const;
 
     /** Called by IsStandardTx and P2SH/BIP62 VerifyScript (which makes it consensus-critical). */
     bool IsPushOnly(const_iterator pc) const;
@@ -565,6 +575,21 @@ public:
         CScriptBase::clear();
         shrink_to_fit();
     }
+
+
+    // cold staking / LPoS
+    bool IsPayToScriptHash_CS() const;
+    bool IsPayToWitnessKeyHash_CS() const;
+    bool MatchPayToWitnessKeyHash(size_t ofs) const;
+    bool MatchPayToScriptHash(size_t ofs) const;
+
+    //Zerocoin params
+    bool IsZerocoinMint() const;
+    bool IsZerocoinSpend() const;
+
+    //Sigma params
+    bool IsSigmaMint() const;
+    bool IsSigmaSpend() const;
 };
 
 struct CScriptWitness

@@ -140,6 +140,19 @@ const char* GetOpName(opcodetype opcode)
 
     case OP_INVALIDOPCODE          : return "OP_INVALIDOPCODE";
 
+
+    // NIX related
+    // zerocoin
+    case OP_ZEROCOINMINT           : return "OP_ZEROCOINMINT";
+    case OP_ZEROCOINSPEND          : return "OP_ZEROCOINSPEND";
+
+    // sigma
+    case OP_SIGMAMINT              : return "OP_SIGMAMINT";
+    case OP_SIGMASPEND             : return "OP_SIGMASPEND";
+
+    // lpos
+    case OP_ISCOINSTAKE            : return "OP_ISCOINSTAKE";
+
     default:
         return "OP_UNKNOWN";
     }
@@ -212,8 +225,22 @@ bool CScript::IsPayToWitnessScriptHash() const
 
 // A witness program is any valid CScript that consists of a 1-byte push opcode
 // followed by a data push between 2 and 40 bytes.
-bool CScript::IsWitnessProgram(int& version, std::vector<unsigned char>& program) const
+bool CScript::IsWitnessProgram(int& version, std::vector<unsigned char>& program, bool isCoinstake) const
 {
+    if (this->IsPayToWitnessKeyHash_CS()){
+        // Skip OP_COINSTAKE and OP_IF
+        if(isCoinstake){
+            version = DecodeOP_N((opcodetype)(*this)[2]);
+            program = std::vector<unsigned char>(this->begin() + 4, this->begin() + 24);
+        }
+        else{
+            version = DecodeOP_N((opcodetype)(*this)[25]);
+            program = std::vector<unsigned char>(this->begin() + 27, this->begin() + 47);
+        }
+
+        return true;
+    }
+
     if (this->size() < 4 || this->size() > 42) {
         return false;
     }
@@ -325,4 +352,164 @@ bool GetScriptOp(CScriptBase::const_iterator& pc, CScriptBase::const_iterator en
 
     opcodeRet = static_cast<opcodetype>(opcode);
     return true;
+}
+
+
+
+// Cold staking / LPoS
+
+bool CScript::MatchPayToScriptHash(size_t ofs) const
+{
+    // Extra-fast test for pay-to-script-hash CScripts:
+    return (this->size() - ofs >= 23 &&
+        (*this)[ofs+0] == OP_HASH160 &&
+        (*this)[ofs+1] == 0x14 &&
+        (*this)[ofs+22] == OP_EQUAL);
+}
+bool CScript::MatchPayToWitnessKeyHash(size_t ofs) const
+{
+    // Extra-fast test for pay-to-script-hash CScripts:
+    return (this->size() - ofs >= 22 &&
+        (*this)[ofs+0] == OP_0 &&
+        (*this)[ofs+1] == 0x14);
+}
+
+
+bool CScript::IsPayToScriptHash_CS() const
+{
+    //2 options:
+    //Only delegate address
+    //Only delegate address and fee percent
+    //All delegate address, fee percent, and delegate reward address
+    //Since 2.2.0.2, accept any cold stake script to allow bech32, legacy denial in kernel.cpp
+    //p2sh/p2wkh - 23, 20
+    int addr1_type = 0;
+    int addr2_type = 0;
+    int script_size = 2;
+    if((*this)[0] != OP_ISCOINSTAKE || (*this)[1] != OP_IF)
+        return false;
+
+    //p2sh - 23
+    if(MatchPayToScriptHash(2)){
+        addr1_type = 1;
+        script_size += 23;
+        if(MatchPayToScriptHash(26))
+            addr2_type = 1;
+        else if(MatchPayToWitnessKeyHash(26))
+            addr2_type = 2;
+
+        if((*this)[25] != OP_ELSE)
+            return false;
+    }
+    //p2wkh - 20
+    else if(MatchPayToWitnessKeyHash(2)){
+        addr1_type = 2;
+        script_size += 22;
+        if(MatchPayToScriptHash(25))
+            addr2_type = 1;
+        else if(MatchPayToWitnessKeyHash(25))
+            addr2_type = 2;
+
+        if((*this)[24] != OP_ELSE)
+            return false;
+    }
+    else
+        return false;
+
+    // add 1 for OP_ELSE
+    script_size += 1;
+
+    // add size of remaining scripts
+    if(addr2_type == 1)
+        script_size += 23;
+    else if(addr2_type == 2)
+        script_size += 22;
+
+    // check for p2sh only
+    if(addr1_type != 1 ||  addr2_type != 1 || (*this)[script_size] != OP_ENDIF)
+        return false;
+
+    return true;
+}
+
+bool CScript::IsPayToWitnessKeyHash_CS() const
+{
+    //2 options:
+    //Only delegate address
+    //Only delegate address and fee percent
+    //All delegate address, fee percent, and delegate reward address
+    //Since 2.2.0.2, accept any cold stake script to allow bech32, legacy denial in kernel.cpp
+    //p2sh/p2wkh - 23, 20
+    int addr1_type = 0;
+    int addr2_type = 0;
+    int script_size = 2;
+    if((*this)[0] != OP_ISCOINSTAKE || (*this)[1] != OP_IF)
+        return false;
+
+    //p2sh - 23
+    if(MatchPayToScriptHash(2)){
+        addr1_type = 1;
+        script_size += 23;
+        if(MatchPayToScriptHash(26))
+            addr2_type = 1;
+        else if(MatchPayToWitnessKeyHash(26))
+            addr2_type = 2;
+
+        if((*this)[25] != OP_ELSE)
+            return false;
+    }
+    //p2wkh - 20
+    else if(MatchPayToWitnessKeyHash(2)){
+        addr1_type = 2;
+        script_size += 22;
+        if(MatchPayToScriptHash(25))
+            addr2_type = 1;
+        else if(MatchPayToWitnessKeyHash(25))
+            addr2_type = 2;
+
+        if((*this)[24] != OP_ELSE)
+            return false;
+    }
+    else
+        return false;
+
+    // add 1 for OP_ELSE
+    script_size += 1;
+
+    // add size of remaining scripts
+    if(addr2_type == 1)
+        script_size += 23;
+    else if(addr2_type == 2)
+        script_size += 22;
+
+    // check for p2wkh only
+    if(addr1_type != 2 ||  addr2_type != 2 || (*this)[script_size] != OP_ENDIF)
+        return false;
+
+    return true;
+}
+
+//Zerocoin params
+bool CScript::IsZerocoinMint() const
+{
+    // Extra-fast test for Zerocoin Mint CScripts:
+    return (this->size() > 0 &&
+            (*this)[0] == OP_ZEROCOINMINT);
+}
+
+bool CScript::IsZerocoinSpend() const {
+    return (this->size() > 0 &&
+            (*this)[0] == OP_ZEROCOINSPEND);
+}
+
+bool CScript::IsSigmaMint() const
+{
+    // Extra-fast test for Sigma Mint CScripts:
+    return (this->size() > 0 &&
+            (*this)[0] == OP_SIGMAMINT);
+}
+
+bool CScript::IsSigmaSpend() const {
+    return (this->size() > 0 &&
+            (*this)[0] == OP_SIGMASPEND);
 }
