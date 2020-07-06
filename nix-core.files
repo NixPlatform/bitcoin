@@ -401,6 +401,7 @@ src/psbt.cpp
 src/psbt.h
 src/pubkey.cpp
 src/pubkey.h
+src/qt/Makefile
 src/qt/addressbookpage.cpp
 src/qt/addressbookpage.h
 src/qt/addresstablemodel.cpp
@@ -926,12 +927,12 @@ src/rpc/util.h
 src/scheduler.cpp
 src/scheduler.h
 src/script/bitcoinconsensus.cpp
-src/script/bitcoinconsensus.h
 src/script/descriptor.cpp
 src/script/descriptor.h
 src/script/interpreter.cpp
 src/script/interpreter.h
 src/script/keyorigin.h
+src/script/nixconsensus.h
 src/script/script.cpp
 src/script/script.h
 src/script/script_error.cpp
