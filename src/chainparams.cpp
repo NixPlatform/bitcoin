@@ -6,6 +6,7 @@
 #include <chainparams.h>
 
 #include <chain.h>
+#include <amount.h>
 #include <chainparamsseeds.h>
 #include <consensus/merkle.h>
 #include <tinyformat.h>
@@ -78,25 +79,6 @@ CAmount GetInitialRewards(int nHeight, const Consensus::Params& consensusParams)
     return nSubsidy;
 }
 
-int64_t CChainParams::GetCoinYearReward(int64_t nTime) const
-{
-    static const int64_t nSecondsInYear = 365 * 24 * 60 * 60;
-
-    if (strNetworkID == "main")
-    {
-        return nCoinYearReward;
-    }
-    else if (strNetworkID != "regtest")
-    {
-        // Y1 5%, Y2 4%, Y3 3%, Y4 2%, ... YN 2%
-        int64_t nYearsSinceGenesis = (nTime - genesis.nTime) / nSecondsInYear;
-
-        if (nYearsSinceGenesis >= 0 && nYearsSinceGenesis < 3)
-            return (5 - nYearsSinceGenesis) * CENT;
-    }
-
-    return nCoinYearReward;
-}
 
 int64_t CChainParams::GetProofOfStakeReward(const CBlockIndex *pindexPrev, int64_t nFees, bool allowInitial) const
 {
@@ -105,18 +87,14 @@ int64_t CChainParams::GetProofOfStakeReward(const CBlockIndex *pindexPrev, int64
     //first block of PoS, add regular block amounts and airdrop amount
     if(!pindexPrev->IsProofOfStake()){
         CAmount nTotal = pindexPrev->nHeight * GetInitialRewards(pindexPrev->nHeight, Params().GetConsensus()) + GetInitialRewards(1, Params().GetConsensus());
-        nSubsidy = (nTotal / COIN) * (5 * CENT) / (365 * 24 * (60 * 60 / nTargetSpacing));
-        //LogPrintf("GetProofOfStakeReward(): Initial=%s\n", FormatMoney(nTotal).c_str());
+        nSubsidy = (nTotal / COIN) * (5 * 1000000) / (365 * 24 * (60 * 60 / nTargetSpacing));
     }else{
-        nSubsidy = (pindexPrev->nMoneySupply / COIN) * GetCoinYearReward(pindexPrev->nTime) / (365 * 24 * (60 * 60 / nTargetSpacing));
+        nSubsidy = (pindexPrev->nMoneySupply / COIN) * nCoinYearReward / (365 * 24 * (60 * 60 / nTargetSpacing));
     }
 
     if(allowInitial && pindexPrev->IsProofOfStake()){
-        nSubsidy = (pindexPrev->nMoneySupply / COIN) * (5 * CENT) / (365 * 24 * (60 * 60 / nTargetSpacing));
+        nSubsidy = (pindexPrev->nMoneySupply / COIN) * (5 * 1000000) / (365 * 24 * (60 * 60 / nTargetSpacing));
     }
-
-    //if (LogAcceptCategory(BCLog::POS) && gArgs.GetBoolArg("-printcreation", false))
-        //LogPrintf("GetProofOfStakeReward(): create=%s\n", FormatMoney(nSubsidy).c_str());
 
     return nSubsidy + nFees;
 }
@@ -430,7 +408,6 @@ public:
         pchMessageStart[2] = 0xb5;
         pchMessageStart[3] = 0xda;
         nDefaultPort = 16215;
-        nBIP44ID = 0x80000001;
         nPruneAfterHeight = 1000;
         m_assumed_blockchain_size = 0;
         m_assumed_chain_state_size = 0;
