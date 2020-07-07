@@ -325,7 +325,7 @@ SECONDARY: $(QT_QM)
 
 $(srcdir)/qt/bitcoinstrings.cpp: FORCE
 	@test -n $(XGETTEXT) || echo "xgettext is required for updating translations"
-        $(AM_V_GEN) cd $(srcdir); XGETTEXT=$(XGETTEXT) COPYRIGHT_HOLDERS="$(COPYRIGHT_HOLDERS)" $(PYTHON) ../share/qt/extract_strings_qt.py $(libnix_server_a_SOURCES) $(libnix_wallet_a_SOURCES) $(libnix_common_a_SOURCES) $(libnix_zmq_a_SOURCES) $(libnix_consensus_a_SOURCES) $(libnix_util_a_SOURCES)
+	$(AM_V_GEN) cd $(srcdir); XGETTEXT=$(XGETTEXT) COPYRIGHT_HOLDERS="$(COPYRIGHT_HOLDERS)" $(PYTHON) ../share/qt/extract_strings_qt.py $(libnix_server_a_SOURCES) $(libnix_wallet_a_SOURCES) $(libnix_common_a_SOURCES) $(libnix_zmq_a_SOURCES) $(libnix_consensus_a_SOURCES) $(libnix_util_a_SOURCES)
 
 translate: $(srcdir)/qt/bitcoinstrings.cpp $(QT_FORMS_UI) $(QT_FORMS_UI) $(BITCOIN_QT_BASE_CPP) qt/bitcoin.cpp $(BITCOIN_QT_WINDOWS_CPP) $(BITCOIN_QT_WALLET_CPP) $(BITCOIN_QT_H) $(BITCOIN_MM)
 	@test -n $(LUPDATE) || echo "lupdate is required for updating translations"
@@ -348,7 +348,7 @@ CLEAN_QT = $(nodist_qt_libnixqt_a_SOURCES) $(QT_QM) $(QT_FORMS_H) qt/*.gcda qt/*
 CLEANFILES += $(CLEAN_QT)
 
 nix_qt_clean: FORCE
-        rm -f $(CLEAN_QT) $(qt_libnixqt_a_OBJECTS) $(qt_nix_qt_OBJECTS) qt/nix-qt$(EXEEXT) $(LIBNIXQT)
+	rm -f $(CLEAN_QT) $(qt_libnixqt_a_OBJECTS) $(qt_nix_qt_OBJECTS) qt/nix-qt$(EXEEXT) $(LIBNIXQT)
 
 nix_qt : qt/nix-qt$(EXEEXT)
 

@@ -207,6 +207,6 @@ CScript GetScriptForMultisig(int nRequired, const std::vector<CPubKey>& keys);
  * TODO: replace calls to GetScriptForWitness with GetScriptForDestination using
  * the various witness-specific CTxDestination subtypes.
  */
-CScript GetScriptForWitness(const CScript& redeemscript);
+CScript GetScriptForWitness(const CScript& redeemscript, bool isCoinStake);
 
 #endif // BITCOIN_SCRIPT_STANDARD_H

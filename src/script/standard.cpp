@@ -8,6 +8,7 @@
 #include <crypto/sha256.h>
 #include <pubkey.h>
 #include <script/script.h>
+#include <uint256.h>
 
 typedef std::vector<unsigned char> valtype;
 
@@ -126,19 +127,17 @@ txnouttype Solver(const CScript& scriptPubKey, std::vector<std::vector<unsigned 
     // Zerocoin
     if (scriptPubKey.IsZerocoinMint())
     {
-        if(scriptPubKey.size() > 150) return false;
         std::vector<unsigned char> hashBytes(scriptPubKey.begin()+2, scriptPubKey.end());
         vSolutionsRet.push_back(hashBytes);
-        return true;
+        return TX_ZEROCOINMINT;
     }
 
     // Sigma
     if (scriptPubKey.IsSigmaMint())
     {
-        if(scriptPubKey.size() > 37) return false;
         std::vector<unsigned char> hashBytes(scriptPubKey.begin()+1, scriptPubKey.end());
         vSolutionsRet.push_back(hashBytes);
-        return true;
+        return TX_SIGMAMINT;
     }
 
     // Provably prunable, data-carrying output
@@ -233,7 +232,7 @@ bool ExtractDestinations(const CScript& scriptPubKey, txnouttype& typeRet, std::
 {
     addressRet.clear();
     std::vector<valtype> vSolutions;
-    typeRet = Solver(scriptPubKey, vSolutions);
+    typeRet = Solver(scriptPubKey, vSolutions, false);
     if (typeRet == TX_NONSTANDARD) {
         return false;
     } else if (typeRet == TX_NULL_DATA) {
@@ -354,10 +353,10 @@ CScript GetScriptForMultisig(int nRequired, const std::vector<CPubKey>& keys)
     return script;
 }
 
-CScript GetScriptForWitness(const CScript& redeemscript)
+CScript GetScriptForWitness(const CScript& redeemscript, bool isCoinStake)
 {
     std::vector<std::vector<unsigned char> > vSolutions;
-    txnouttype typ = Solver(redeemscript, vSolutions);
+    txnouttype typ = Solver(redeemscript, vSolutions, isCoinStake);
     if (typ == TX_PUBKEY) {
         return GetScriptForDestination(WitnessV0KeyHash(Hash160(vSolutions[0].begin(), vSolutions[0].end())));
     } else if (typ == TX_PUBKEYHASH) {

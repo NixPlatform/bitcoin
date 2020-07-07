@@ -3614,7 +3614,7 @@ public:
     {
         // Always present: script type and redeemscript
         std::vector<std::vector<unsigned char>> solutions_data;
-        txnouttype which_type = Solver(subscript, solutions_data);
+        txnouttype which_type = Solver(subscript, solutions_data, true);
         obj.pushKV("script", GetTxnOutputType(which_type));
         obj.pushKV("hex", HexStr(subscript.begin(), subscript.end()));
 
@@ -3811,7 +3811,7 @@ UniValue getaddressinfo(const JSONRPCRequest& request)
     isminetype mine = pwallet->IsMine(dest);
     ret.pushKV("ismine", bool(mine & ISMINE_SPENDABLE));
 
-    bool solvable = provider && IsSolvable(*provider, scriptPubKey);
+    bool solvable = provider && IsSolvable(*provider, scriptPubKey, false);
     ret.pushKV("solvable", solvable);
 
     if (solvable) {
