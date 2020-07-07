@@ -339,6 +339,12 @@ public:
         return (vin.size() == 1 && vin[0].prevout.IsNull());
     }
 
+    bool IsCoinStake() const
+    {
+        return (((nVersion >> 8) & 0xFF) == 3) && vin.size() > 0 && vout.size() > 1;
+    }
+
+
     friend bool operator==(const CTransaction& a, const CTransaction& b)
     {
         return a.hash == b.hash;
@@ -403,6 +409,12 @@ struct CMutableTransaction
         }
         return false;
     }
+
+    bool IsCoinStake() const
+    {
+        return (((nVersion >> 8) & 0xFF) == 3) && vin.size() > 0 && vout.size() > 1;
+    }
+
 };
 
 typedef std::shared_ptr<const CTransaction> CTransactionRef;

@@ -321,7 +321,7 @@ static void MutateTxAddOutPubKey(CMutableTransaction& tx, const std::string& str
             throw std::runtime_error("Uncompressed pubkeys are not useable for SegWit outputs");
         }
         // Call GetScriptForWitness() to build a P2WSH scriptPubKey
-        scriptPubKey = GetScriptForWitness(scriptPubKey);
+        scriptPubKey = GetScriptForWitness(scriptPubKey, false);
     }
     if (bScriptHash) {
         // Get the ID for the script, and then construct a P2SH destination for it.
@@ -391,7 +391,7 @@ static void MutateTxAddOutMultiSig(CMutableTransaction& tx, const std::string& s
             }
         }
         // Call GetScriptForWitness() to build a P2WSH scriptPubKey
-        scriptPubKey = GetScriptForWitness(scriptPubKey);
+        scriptPubKey = GetScriptForWitness(scriptPubKey, false);
     }
     if (bScriptHash) {
         if (scriptPubKey.size() > MAX_SCRIPT_ELEMENT_SIZE) {
@@ -464,7 +464,7 @@ static void MutateTxAddOutScript(CMutableTransaction& tx, const std::string& str
     }
 
     if (bSegWit) {
-        scriptPubKey = GetScriptForWitness(scriptPubKey);
+        scriptPubKey = GetScriptForWitness(scriptPubKey, false);
     }
     if (bScriptHash) {
         if (scriptPubKey.size() > MAX_SCRIPT_ELEMENT_SIZE) {
@@ -650,7 +650,7 @@ static void MutateTxSign(CMutableTransaction& tx, const std::string& flagStr)
         SignatureData sigdata = DataFromTransaction(mergedTx, i, coin.out);
         // Only sign SIGHASH_SINGLE if there's a corresponding output:
         if (!fHashSingle || (i < mergedTx.vout.size()))
-            ProduceSignature(keystore, MutableTransactionSignatureCreator(&mergedTx, i, amount, nHashType), prevPubKey, sigdata);
+            ProduceSignature(keystore, MutableTransactionSignatureCreator(&mergedTx, i, amount, nHashType), prevPubKey, sigdata, false);
 
         UpdateInput(txin, sigdata);
     }

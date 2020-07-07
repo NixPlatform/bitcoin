@@ -638,7 +638,7 @@ nix_wallet_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIB
 
 # bitcoinconsensus library #
 if BUILD_BITCOIN_LIBS
-include_HEADERS = script/bitcoinconsensus.h
+include_HEADERS = script/nixconsensus.h
 libnixconsensus_la_SOURCES = support/cleanse.cpp $(crypto_libnix_crypto_base_a_SOURCES) $(libnix_consensus_a_SOURCES)
 
 if GLIBC_BACK_COMPAT
