@@ -15,6 +15,15 @@
 
 #include <vector>
 
+enum eBlockFlags
+{
+    BLOCK_PROOF_OF_STAKE            = (1 << 0), // is proof-of-stake block
+    BLOCK_STAKE_ENTROPY             = (1 << 1), // entropy bit for stake modifier
+    BLOCK_STAKE_MODIFIER            = (1 << 2), // regenerated stake modifier
+
+    BLOCK_FAILED_DUPLICATE_STAKE    = (1 << 3),
+};
+
 /**
  * Maximum amount of time that a block timestamp is allowed to exceed the
  * current network-adjusted time before the block will be accepted.
@@ -186,6 +195,12 @@ public:
     //! (memory only) Maximum nTime in the chain up to and including this block.
     unsigned int nTimeMax{0};
 
+    // proof-of-stake specific fields
+    unsigned int nFlags;  // pos: block index flags
+    uint256 bnStakeModifier; // hash modifier for proof-of-stake
+    COutPoint prevoutStake;
+    CAmount nMoneySupply;
+
     CBlockIndex()
     {
     }
@@ -307,6 +322,12 @@ public:
     //! Efficiently find an ancestor of this block.
     CBlockIndex* GetAncestor(int height);
     const CBlockIndex* GetAncestor(int height) const;
+
+
+    bool IsProofOfStake() const
+    {
+        return (nFlags & BLOCK_PROOF_OF_STAKE);
+    }
 };
 
 arith_uint256 GetBlockProof(const CBlockIndex& block);

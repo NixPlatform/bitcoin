@@ -6,7 +6,6 @@
 #ifndef BITCOIN_CHAINPARAMS_H
 #define BITCOIN_CHAINPARAMS_H
 
-#include <chain.h>
 #include <chainparamsbase.h>
 #include <consensus/params.h>
 #include <primitives/block.h>
@@ -14,9 +13,6 @@
 
 #include <memory>
 #include <vector>
-
-static const uint32_t CHAIN_NO_GENESIS = 444444;
-static const uint32_t CHAIN_NO_STEALTH_SPEND = 444445; // used hardened
 
 struct SeedSpec6 {
     uint8_t addr[16];
@@ -41,6 +37,8 @@ struct ChainTxData {
     double dTxRate;   //!< estimated number of transactions per second after that timestamp
 };
 
+class CBlockIndex;
+
 /**
  * CChainParams defines various tweakable parameters of a given instance of the
  * Bitcoin system. There are three: the main network on which people trade goods
@@ -57,13 +55,6 @@ public:
         SECRET_KEY,
         EXT_PUBLIC_KEY,
         EXT_SECRET_KEY,
-        STEALTH_ADDRESS,
-        EXT_KEY_HASH,
-        EXT_ACC_HASH,
-        EXT_PUBLIC_KEY_BTC,
-        EXT_SECRET_KEY_BTC,
-        PUBKEY_ADDRESS_256,
-        SCRIPT_ADDRESS_256,
 
         MAX_BASE58_TYPES
     };
@@ -74,10 +65,7 @@ public:
     uint32_t GetTargetTimespan() const { return nTargetTimespan; }
 
     uint32_t GetStakeTimestampMask(int nHeight) const { return nStakeTimestampMask; }
-    int64_t GetCoinYearReward(int64_t nTime) const;
     int64_t GetProofOfStakeReward(const CBlockIndex *pindexPrev, int64_t nFees, bool allowInitial = false) const;
-
-    int BIP44ID() const { return nBIP44ID; }
 
     const Consensus::Params& GetConsensus() const { return consensus; }
     const CMessageHeader::MessageStartChars& MessageStart() const { return pchMessageStart; }
@@ -117,8 +105,6 @@ public:
     int64_t MaxTipAge() const { return nMaxTipAge; }
     int PoolMaxTransactions() const { return nPoolMaxTransactions; }
     int FulfilledRequestExpireTime() const { return nFulfilledRequestExpireTime; }
-    std::string SporkPubKey() const { return strSporkPubKey; }
-    std::string GhostnodePaymentPubKey() const { return strGhostnodePaymentsPubKey; }
     
 protected:
     CChainParams() {}
@@ -126,13 +112,11 @@ protected:
     Consensus::Params consensus;
     CMessageHeader::MessageStartChars pchMessageStart;
     int nDefaultPort;
-    int nBIP44ID;
     uint64_t nPruneAfterHeight;
     uint64_t m_assumed_blockchain_size;
     uint64_t m_assumed_chain_state_size;
     std::vector<std::string> vSeeds;
     std::vector<unsigned char> base58Prefixes[MAX_BASE58_TYPES];
-    std::vector<unsigned char> bech32Prefixes[MAX_BASE58_TYPES];
     std::string bech32_hrp;
     std::string strNetworkID;
     CBlock genesis;
@@ -148,8 +132,6 @@ protected:
     long nMaxTipAge;
     int nPoolMaxTransactions;
     int nFulfilledRequestExpireTime;
-    std::string strSporkPubKey;
-    std::string strGhostnodePaymentsPubKey;
 
 public:
     /* POS params */
@@ -157,7 +139,7 @@ public:
     uint32_t nTargetSpacing;            // targeted number of seconds between blocks
     uint32_t nTargetTimespan;
     uint32_t nStakeTimestampMask = (1 << 4) -1; // 4 bits, every kernel stake hash will change every 16 seconds
-    int64_t nCoinYearReward = 1.5 * CENT; // 1.5% per year based on a 30% staking model
+    int64_t nCoinYearReward = 1.5 * 1000000; // 1.5% per year based on a 30% staking model (1.5 * CENT)
 };
 
 /**

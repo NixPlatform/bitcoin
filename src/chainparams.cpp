@@ -5,6 +5,8 @@
 
 #include <chainparams.h>
 
+#include <chain.h>
+#include <amount.h>
 #include <chainparamsseeds.h>
 #include <consensus/merkle.h>
 #include <tinyformat.h>
@@ -77,25 +79,6 @@ CAmount GetInitialRewards(int nHeight, const Consensus::Params& consensusParams)
     return nSubsidy;
 }
 
-int64_t CChainParams::GetCoinYearReward(int64_t nTime) const
-{
-    static const int64_t nSecondsInYear = 365 * 24 * 60 * 60;
-
-    if (strNetworkID == "main")
-    {
-        return nCoinYearReward;
-    }
-    else if (strNetworkID != "regtest")
-    {
-        // Y1 5%, Y2 4%, Y3 3%, Y4 2%, ... YN 2%
-        int64_t nYearsSinceGenesis = (nTime - genesis.nTime) / nSecondsInYear;
-
-        if (nYearsSinceGenesis >= 0 && nYearsSinceGenesis < 3)
-            return (5 - nYearsSinceGenesis) * CENT;
-    }
-
-    return nCoinYearReward;
-}
 
 int64_t CChainParams::GetProofOfStakeReward(const CBlockIndex *pindexPrev, int64_t nFees, bool allowInitial) const
 {
@@ -104,18 +87,14 @@ int64_t CChainParams::GetProofOfStakeReward(const CBlockIndex *pindexPrev, int64
     //first block of PoS, add regular block amounts and airdrop amount
     if(!pindexPrev->IsProofOfStake()){
         CAmount nTotal = pindexPrev->nHeight * GetInitialRewards(pindexPrev->nHeight, Params().GetConsensus()) + GetInitialRewards(1, Params().GetConsensus());
-        nSubsidy = (nTotal / COIN) * (5 * CENT) / (365 * 24 * (60 * 60 / nTargetSpacing));
-        //LogPrintf("GetProofOfStakeReward(): Initial=%s\n", FormatMoney(nTotal).c_str());
+        nSubsidy = (nTotal / COIN) * (5 * 1000000) / (365 * 24 * (60 * 60 / nTargetSpacing));
     }else{
-        nSubsidy = (pindexPrev->nMoneySupply / COIN) * GetCoinYearReward(pindexPrev->nTime) / (365 * 24 * (60 * 60 / nTargetSpacing));
+        nSubsidy = (pindexPrev->nMoneySupply / COIN) * nCoinYearReward / (365 * 24 * (60 * 60 / nTargetSpacing));
     }
 
     if(allowInitial && pindexPrev->IsProofOfStake()){
-        nSubsidy = (pindexPrev->nMoneySupply / COIN) * (5 * CENT) / (365 * 24 * (60 * 60 / nTargetSpacing));
+        nSubsidy = (pindexPrev->nMoneySupply / COIN) * (5 * 1000000) / (365 * 24 * (60 * 60 / nTargetSpacing));
     }
-
-    //if (LogAcceptCategory(BCLog::POS) && gArgs.GetBoolArg("-printcreation", false))
-        //LogPrintf("GetProofOfStakeReward(): create=%s\n", FormatMoney(nSubsidy).c_str());
 
     return nSubsidy + nFees;
 }
@@ -176,8 +155,6 @@ public:
 
         nPoolMaxTransactions = 3;
         nFulfilledRequestExpireTime = 60*60; // fulfilled requests expire in 1 hour
-        strSporkPubKey = "04549ac134f694c0243f503e8c8a9a986f5de6610049c40b07816809b0d1d06a21b07be27b9bb555931773f62ba6cf35a25fd52f694d4e1106ccd237a7bb899fdd";
-        strGhostnodePaymentsPubKey = "04549ac134f694c0243f503e8c8a9a986f5de6610049c40b07816809b0d1d06a21b07be27b9bb555931773f62ba6cf35a25fd52f694d4e1106ccd237a7bb899fdd";
 
         // new development address - gets paid daily instead of per block, reduces bloat
         consensus.nNewDevelopmentPayoutCycleStartHeight = 179281;
@@ -196,9 +173,8 @@ public:
         pchMessageStart[3] = 0xf9;
         nDefaultPort = 6214;
         nPruneAfterHeight = 0;
-        nBIP44ID = 0x8000002C;
         m_assumed_blockchain_size = 1;
-        m_assumed_chain_state_size = 0;
+        m_assumed_chain_state_size = 1;
 
         genesis = CreateGenesisBlock(1522615406, 1119233, 0x1e0ffff0, 1, 0 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
@@ -212,31 +188,12 @@ public:
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,38);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,53);
         base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,128);
-        base58Prefixes[PUBKEY_ADDRESS_256] = std::vector<unsigned char>(1,57);
-        base58Prefixes[SCRIPT_ADDRESS_256] = {0x3d};
-        base58Prefixes[STEALTH_ADDRESS]    = {0x1F}; // g
         base58Prefixes[EXT_PUBLIC_KEY]     = {0x04, 0x88, 0xB2, 0x1E};
         base58Prefixes[EXT_SECRET_KEY]     = {0x04, 0x88, 0xAD, 0xE4};
-        base58Prefixes[EXT_KEY_HASH]       = {0x4b}; // X
-        base58Prefixes[EXT_ACC_HASH]       = {0x17}; // A
-        base58Prefixes[EXT_PUBLIC_KEY_BTC] = {0x04, 0x88, 0xB2, 0x1E};
-        base58Prefixes[EXT_SECRET_KEY_BTC] = {0x04, 0x88, 0xAD, 0xE4};
-
-        bech32Prefixes[PUBKEY_ADDRESS].assign       ("nh","nh"+2);
-        bech32Prefixes[SCRIPT_ADDRESS].assign       ("nr","nr"+2);
-        bech32Prefixes[PUBKEY_ADDRESS_256].assign   ("nl","nl"+2);
-        bech32Prefixes[SCRIPT_ADDRESS_256].assign   ("nj","nj"+2);
-        bech32Prefixes[SECRET_KEY].assign           ("nx","nx"+2);
-        bech32Prefixes[EXT_PUBLIC_KEY].assign       ("nen","nen"+3);
-        bech32Prefixes[EXT_SECRET_KEY].assign       ("nex","nex"+3);
-        bech32Prefixes[STEALTH_ADDRESS].assign      ("ng","ng"+2);
-        bech32Prefixes[EXT_KEY_HASH].assign         ("nek","nek"+3);
-        bech32Prefixes[EXT_ACC_HASH].assign         ("nea","nea"+3);
 
         bech32_hrp = "nix";
 
         vFixedSeeds = std::vector<SeedSpec6>(pnSeed6_main, pnSeed6_main + ARRAYLEN(pnSeed6_main));
-        vFixedSeeds.clear();
 
         fDefaultConsistencyChecks = false;
         fRequireStandard = true;
@@ -338,15 +295,12 @@ public:
 
         nPoolMaxTransactions = 3;
         nFulfilledRequestExpireTime = 5*60; // fulfilled requests expire in 5 minutes
-        strSporkPubKey = "046f78dcf911fbd61910136f7f0f8d90578f68d0b3ac973b5040fb7afb501b5939f39b108b0569dca71488f5bbf498d92e4d1194f6f941307ffd95f75e76869f0e";
-        strGhostnodePaymentsPubKey = "046f78dcf911fbd61910136f7f0f8d90578f68d0b3ac973b5040fb7afb501b5939f39b108b0569dca71488f5bbf498d92e4d1194f6f941307ffd95f75e76869f0e";
 
         pchMessageStart[0] = 0x0b;
         pchMessageStart[1] = 0x11;
         pchMessageStart[2] = 0x09;
         pchMessageStart[3] = 0x07;
         nDefaultPort = 16214;
-        nBIP44ID = 0x80000001;
         nPruneAfterHeight = 1000;
         m_assumed_blockchain_size = 40;
         m_assumed_chain_state_size = 2;
@@ -356,39 +310,18 @@ public:
         assert(consensus.hashGenesisBlock == uint256S("0xdd28ad86def767c3cfc34267a950d871fc7462bc57ea4a929fc3596d9b598e41"));
         assert(genesis.hashMerkleRoot == uint256S("0x06c118557a3a44b144a31c9f3a967bd94f94e0d7ff666d30587360f695f0873d"));
 
-        vFixedSeeds.clear();
-        vSeeds.clear();
         // nodes with support for servicebits filtering should be at the top
         vSeeds.emplace_back("testnet.nixplatform.io");
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,1);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,3);
         base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,128);
-        base58Prefixes[PUBKEY_ADDRESS_256] = std::vector<unsigned char>(1,57);
-        base58Prefixes[SCRIPT_ADDRESS_256] = {0x3d};
-        base58Prefixes[STEALTH_ADDRESS]    = {0x0c}; // G
         base58Prefixes[EXT_PUBLIC_KEY]     = {0x04, 0x88, 0xB2, 0x1E};
         base58Prefixes[EXT_SECRET_KEY]     = {0x04, 0x88, 0xAD, 0xE4};
-        base58Prefixes[EXT_KEY_HASH]       = {0x4b}; // X
-        base58Prefixes[EXT_ACC_HASH]       = {0x17}; // A
-        base58Prefixes[EXT_PUBLIC_KEY_BTC] = {0x04, 0x88, 0xB2, 0x1E};
-        base58Prefixes[EXT_SECRET_KEY_BTC] = {0x04, 0x88, 0xAD, 0xE4};
-
-        bech32Prefixes[PUBKEY_ADDRESS].assign       ("nh","nh"+2);
-        bech32Prefixes[SCRIPT_ADDRESS].assign       ("nr","nr"+2);
-        bech32Prefixes[PUBKEY_ADDRESS_256].assign   ("nl","nl"+2);
-        bech32Prefixes[SCRIPT_ADDRESS_256].assign   ("nj","nj"+2);
-        bech32Prefixes[SECRET_KEY].assign           ("nx","nx"+2);
-        bech32Prefixes[EXT_PUBLIC_KEY].assign       ("nen","nen"+3);
-        bech32Prefixes[EXT_SECRET_KEY].assign       ("nex","nex"+3);
-        bech32Prefixes[STEALTH_ADDRESS].assign      ("ng","ng"+2);
-        bech32Prefixes[EXT_KEY_HASH].assign         ("nek","nek"+3);
-        bech32Prefixes[EXT_ACC_HASH].assign         ("nea","nea"+3);
 
         bech32_hrp = "tnix";
 
-        //vFixedSeeds = std::vector<SeedSpec6>(pnSeed6_test, pnSeed6_test + ARRAYLEN(pnSeed6_test));
-        vFixedSeeds.clear();
+        vFixedSeeds = std::vector<SeedSpec6>(pnSeed6_test, pnSeed6_test + ARRAYLEN(pnSeed6_test));
 
         fDefaultConsistencyChecks = false;
         fRequireStandard = false;
@@ -451,8 +384,6 @@ public:
 
         nPoolMaxTransactions = 3;
         nFulfilledRequestExpireTime = 60*60; // fulfilled requests expire in 1 hour
-        strSporkPubKey = "04549ac134f694c0243f503e8c8a9a986f5de6610049c40b07816809b0d1d06a21b07be27b9bb555931773f62ba6cf35a25fd52f694d4e1106ccd237a7bb899fdd";
-        strGhostnodePaymentsPubKey = "04549ac134f694c0243f503e8c8a9a986f5de6610049c40b07816809b0d1d06a21b07be27b9bb555931773f62ba6cf35a25fd52f694d4e1106ccd237a7bb899fdd";
 
         consensus.nCoinMaturityReductionHeight = 1;
         consensus.nStartGhostFeeDistribution = 9999;
@@ -477,7 +408,6 @@ public:
         pchMessageStart[2] = 0xb5;
         pchMessageStart[3] = 0xda;
         nDefaultPort = 16215;
-        nBIP44ID = 0x80000001;
         nPruneAfterHeight = 1000;
         m_assumed_blockchain_size = 0;
         m_assumed_chain_state_size = 0;
@@ -512,26 +442,8 @@ public:
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,38);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,53);
         base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,128);
-        base58Prefixes[PUBKEY_ADDRESS_256] = std::vector<unsigned char>(1,57);
-        base58Prefixes[SCRIPT_ADDRESS_256] = {0x3d};
-        base58Prefixes[STEALTH_ADDRESS]    = {0x0c}; // G
         base58Prefixes[EXT_PUBLIC_KEY]     = {0x04, 0x88, 0xB2, 0x1E};
         base58Prefixes[EXT_SECRET_KEY]     = {0x04, 0x88, 0xAD, 0xE4};
-        base58Prefixes[EXT_KEY_HASH]       = {0x4b}; // X
-        base58Prefixes[EXT_ACC_HASH]       = {0x17}; // A
-        base58Prefixes[EXT_PUBLIC_KEY_BTC] = {0x04, 0x88, 0xB2, 0x1E};
-        base58Prefixes[EXT_SECRET_KEY_BTC] = {0x04, 0x88, 0xAD, 0xE4};
-
-        bech32Prefixes[PUBKEY_ADDRESS].assign       ("nh","nh"+2);
-        bech32Prefixes[SCRIPT_ADDRESS].assign       ("nr","nr"+2);
-        bech32Prefixes[PUBKEY_ADDRESS_256].assign   ("nl","nl"+2);
-        bech32Prefixes[SCRIPT_ADDRESS_256].assign   ("nj","nj"+2);
-        bech32Prefixes[SECRET_KEY].assign           ("nx","nx"+2);
-        bech32Prefixes[EXT_PUBLIC_KEY].assign       ("nen","nen"+3);
-        bech32Prefixes[EXT_SECRET_KEY].assign       ("nex","nex"+3);
-        bech32Prefixes[STEALTH_ADDRESS].assign      ("ng","ng"+2);
-        bech32Prefixes[EXT_KEY_HASH].assign         ("nek","nek"+3);
-        bech32Prefixes[EXT_ACC_HASH].assign         ("nea","nea"+3);
 
         bech32_hrp = "rnix";
     }
