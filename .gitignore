@@ -2,15 +2,15 @@
 
 *.exe
 *.pdb
-src/bitcoin
-src/bitcoind
-src/bitcoin-cli
-src/bitcoin-tx
-src/bitcoin-wallet
+src/nix
+src/nixd
+src/nix-cli
+src/nix-tx
+src/nix-wallet
 src/test/fuzz
 !src/test/fuzz/*.*
-src/test/test_bitcoin
-src/qt/test/test_bitcoin-qt
+src/test/test_nix
+src/qt/test/test_nix-qt
 
 # autoreconf
 Makefile.in
@@ -90,8 +90,8 @@ src/qt/bitcoin-qt.includes
 *.qm
 Makefile
 !depends/Makefile
-src/qt/bitcoin-qt
-Bitcoin-Qt.app
+src/qt/nix-qt
+NIX-Qt.app
 background.tiff*
 
 # Qt Creator
@@ -99,7 +99,7 @@ Makefile.am.user
 
 # Unit-tests
 Makefile.test
-bitcoin-qt_test
+nix-qt_test
 
 # Resources cpp
 qrc_*.cpp
