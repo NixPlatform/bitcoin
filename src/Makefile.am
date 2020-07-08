@@ -391,7 +391,25 @@ crypto_libnix_crypto_base_a_SOURCES = \
   crypto/sha512.cpp \
   crypto/sha512.h \
   crypto/siphash.cpp \
-  crypto/siphash.h
+  crypto/siphash.h \
+  crypto/Lyra2RE/Lyra2RE.c \
+  crypto/Lyra2RE/Lyra2RE.h \
+  crypto/Lyra2RE/Lyra2.c \
+  crypto/Lyra2RE/Lyra2.h \
+  crypto/Lyra2RE/Sponge.c \
+  crypto/Lyra2RE/Sponge.h \
+  crypto/Lyra2RE/blake.c \
+  crypto/Lyra2RE/blake.h \
+  crypto/Lyra2RE/groestl.c \
+  crypto/Lyra2RE/groestl.h \
+  crypto/Lyra2RE/keccak.c \
+  crypto/Lyra2RE/keccak.h \
+  crypto/Lyra2RE/skein.c \
+  crypto/Lyra2RE/skein.h \
+  crypto/Lyra2RE/cubehash.c \
+  crypto/Lyra2RE/cubehash.h \
+  crypto/Lyra2RE/bmw.c \
+  crypto/Lyra2RE/bmw.h
 
 if USE_ASM
 crypto_libnix_crypto_base_a_SOURCES += crypto/sha256_sse4.cpp
@@ -727,18 +745,6 @@ endif
 include Makefile.test_util.include
 include Makefile.test_fuzz.include
 
-if ENABLE_TESTS
-include Makefile.test.include
-endif
-
-if ENABLE_BENCH
-include Makefile.bench.include
-endif
-
 if ENABLE_QT
 include Makefile.qt.include
-endif
-
-if ENABLE_QT_TESTS
-include Makefile.qttest.include
 endif
