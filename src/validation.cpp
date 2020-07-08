@@ -1130,7 +1130,7 @@ static bool WriteBlockToDisk(const CBlock& block, FlatFilePos& pos, const CMessa
     return true;
 }
 
-bool ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos, const Consensus::Params& consensusParams)
+bool ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos, int nHeight, const Consensus::Params& consensusParams)
 {
     block.SetNull();
 
@@ -1148,7 +1148,7 @@ bool ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos, const Consensus::P
     }
 
     // Check the header
-    if (!CheckProofOfWork(block.GetHash(), block.nBits, consensusParams))
+    if (!CheckProofOfWork(block.GetPoWHash(nHeight), block.nBits, consensusParams))
         return error("ReadBlockFromDisk: Errors in block header at %s", pos.ToString());
 
     return true;
@@ -1162,7 +1162,7 @@ bool ReadBlockFromDisk(CBlock& block, const CBlockIndex* pindex, const Consensus
         blockPos = pindex->GetBlockPos();
     }
 
-    if (!ReadBlockFromDisk(block, blockPos, consensusParams))
+    if (!ReadBlockFromDisk(block, blockPos, pindex->nHeight, consensusParams))
         return false;
     if (block.GetHash() != pindex->GetBlockHash())
         return error("ReadBlockFromDisk(CBlock&, CBlockIndex*): GetHash() doesn't match index for %s at %s",
@@ -3268,8 +3268,22 @@ static bool FindUndoPos(BlockValidationState &state, int nFile, FlatFilePos &pos
 
 static bool CheckBlockHeader(const CBlockHeader& block, BlockValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW = true)
 {
+    // Get prev block index
+    CBlockIndex* pindexPrev = nullptr;
+    BlockMap::iterator mi = g_blockman.m_block_index.find(block.hashPrevBlock);
+    if (mi == g_blockman.m_block_index.end()) {
+        LogPrintf("ERROR: %s: prev block not found\n", __func__);
+        return state.Invalid(BlockValidationResult::BLOCK_MISSING_PREV, "prev-blk-not-found");
+    }
+    pindexPrev = (*mi).second;
+    if (pindexPrev->nStatus & BLOCK_FAILED_MASK) {
+        LogPrintf("ERROR: %s: prev block invalid\n", __func__);
+        return state.Invalid(BlockValidationResult::BLOCK_INVALID_PREV, "bad-prevblk");
+    }
+
+    assert(pindexPrev);
     // Check proof of work matches claimed amount
-    if (fCheckPOW && !CheckProofOfWork(block.GetHash(), block.nBits, consensusParams))
+    if (fCheckPOW && !CheckProofOfWork(block.GetPoWHash(pindexPrev->nHeight + 1), block.nBits, consensusParams))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "high-hash", "proof of work failed");
 
     return true;
@@ -4710,7 +4724,16 @@ bool LoadExternalBlockFile(const CChainParams& chainparams, FILE* fileIn, FlatFi
                     while (range.first != range.second) {
                         std::multimap<uint256, FlatFilePos>::iterator it = range.first;
                         std::shared_ptr<CBlock> pblockrecursive = std::make_shared<CBlock>();
-                        if (ReadBlockFromDisk(*pblockrecursive, it->second, chainparams.GetConsensus()))
+                        const uint256 hash = pblockrecursive->GetHash();
+                        CBlockIndex* pindex = nullptr;
+                        BlockMap::iterator mi = g_blockman.m_block_index.find(hash);
+                        if (mi == g_blockman.m_block_index.end()) {
+                            LogPrintf("ERROR: %s: prev block not found\n", __func__);
+                        }
+                        pindex = (*mi).second;
+                        assert(pindex);
+                        const int nHeight = pindex->nHeight;
+                        if (ReadBlockFromDisk(*pblockrecursive, it->second, nHeight, chainparams.GetConsensus()))
                         {
                             LogPrint(BCLog::REINDEX, "%s: Processing out of order child %s of %s\n", __func__, pblockrecursive->GetHash().ToString(),
                                     head.ToString());

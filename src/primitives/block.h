@@ -9,6 +9,7 @@
 #include <primitives/transaction.h>
 #include <serialize.h>
 #include <uint256.h>
+#include "crypto/Lyra2RE/Lyra2RE.h"
 
 /** Nodes collect new transactions into a block, hash them into a hash tree,
  * and scan through nonce values to make the block's hash satisfy proof-of-work
@@ -21,6 +22,7 @@ class CBlockHeader
 {
 public:
     // header
+    static const int CURRENT_VERSION = 0x02;
     int32_t nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;
@@ -47,7 +49,7 @@ public:
 
     void SetNull()
     {
-        nVersion = 0;
+        nVersion = CURRENT_VERSION;
         hashPrevBlock.SetNull();
         hashMerkleRoot.SetNull();
         nTime = 0;
@@ -62,12 +64,13 @@ public:
 
     uint256 GetHash() const;
 
+    uint256 GetPoWHash(int nHeight) const;
+
     int64_t GetBlockTime() const
     {
         return (int64_t)nTime;
     }
 };
-
 
 class CBlock : public CBlockHeader
 {
