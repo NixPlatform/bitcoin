@@ -95,7 +95,16 @@ TransactionError BroadcastTransaction(NodeContext& node, const CTransactionRef t
     }
 
     if (relay) {
-        RelayTransaction(hashTx, *node.connman);
+        if (gArgs.GetBoolArg("-dandelion", false)) {
+            int64_t nCurrTime = GetTimeMicros();
+            int64_t nEmbargo = 1000000*DANDELION_EMBARGO_MINIMUM+PoissonNextSend(nCurrTime, DANDELION_EMBARGO_AVG_ADD);
+            node.connman->insertDandelionEmbargo(hashTx ,nEmbargo);
+            LogPrint(BCLog::DANDELION, "dandeliontx %s embargoed for %d seconds\n", hashTx.ToString(), (nEmbargo-nCurrTime)/1000000);
+            CInv inv(MSG_DANDELION_TX, hashTx);
+            node.connman->localDandelionDestinationPushInventory(inv);
+        } else {
+            RelayTransaction(hashTx, *node.connman);
+        }
     }
 
     return TransactionError::OK;

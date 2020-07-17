@@ -1027,8 +1027,8 @@ public:
                 m_tx_relay->setInventoryTxToSend.insert(inv.hash);
             }
         } else if (inv.type == MSG_DANDELION_TX) {
-            if (setDandelionInventoryKnown.count(inv.hash)==0) {
-                vInventoryDandelionTxToSend.push_back(inv.hash);
+            if (m_tx_relay->setDandelionInventoryKnown.count(inv.hash)==0) {
+                m_tx_relay->vInventoryDandelionTxToSend.push_back(inv.hash);
             }
         } else if (inv.type == MSG_BLOCK) {
             LOCK(cs_inventory);
