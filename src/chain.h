@@ -252,7 +252,7 @@ public:
 
     uint256 GetBlockPoWHash() const
     {
-        return GetBlockHeader().GetPoWHash(nHeight);
+        return GetBlockHeader().GetPoWHash();
     }
 
     /**

@@ -18,6 +18,8 @@ extern RecursiveMutex g_cs_orphans;
 
 /** Default for -maxorphantx, maximum number of orphan transactions kept in memory */
 static const unsigned int DEFAULT_MAX_ORPHAN_TRANSACTIONS = 100;
+/** Probability (percentage) that a Dandelion transaction enters fluff phase */
+static const unsigned int DANDELION_FLUFF = 10;
 /** Default number of orphan+recently-replaced txn to keep around for block reconstruction */
 static const unsigned int DEFAULT_BLOCK_RECONSTRUCTION_EXTRA_TXN = 100;
 static const bool DEFAULT_PEERBLOOMFILTERS = false;

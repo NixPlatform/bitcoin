@@ -31,6 +31,7 @@ class ChainClient;
 struct NodeContext {
     std::unique_ptr<CConnman> connman;
     CTxMemPool* mempool{nullptr}; // Currently a raw pointer because the memory is not managed by this struct
+    CTxMemPool* stempool{nullptr}; // Currently a raw pointer because the memory is not managed by this struct
     std::unique_ptr<PeerLogicValidation> peer_logic;
     std::unique_ptr<BanMan> banman;
     std::unique_ptr<interfaces::Chain> chain;

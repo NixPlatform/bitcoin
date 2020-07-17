@@ -90,6 +90,15 @@ static const bool DEFAULT_FORCEDNSSEED = false;
 static const size_t DEFAULT_MAXRECEIVEBUFFER = 5 * 1000;
 static const size_t DEFAULT_MAXSENDBUFFER    = 1 * 1000;
 
+/** Maximum number of outbound peers designated as Dandelion destinations */
+static const int DANDELION_MAX_DESTINATIONS = 2;
+/** Expected time between Dandelion routing shuffles (in seconds). */
+static const int DANDELION_SHUFFLE_INTERVAL = 120;
+/** The minimum amount of time a Dandelion transaction is embargoed (seconds) */
+static const int DANDELION_EMBARGO_MINIMUM = 10;
+/** The average additional embargo time beyond the minimum amount (seconds) */
+static const int DANDELION_EMBARGO_AVG_ADD = 20;
+
 typedef int64_t NodeId;
 
 struct AddedNodeInfo
@@ -322,6 +331,19 @@ public:
 
     void WakeMessageHandler();
 
+
+    // Public Dandelion field
+    std::map<uint256, int64_t> mDandelionEmbargo;
+    // Dandelion methods
+    bool isDandelionInbound(const CNode* const pnode) const;
+    bool isLocalDandelionDestinationSet() const;
+    bool setLocalDandelionDestination();
+    CNode* getDandelionDestination(CNode* pfrom);
+    bool localDandelionDestinationPushInventory(const CInv& inv);
+    bool insertDandelionEmbargo(const uint256& hash, const int64_t& embargo);
+    bool isTxDandelionEmbargoed(const uint256& hash) const;
+    bool removeDandelionEmbargo(const uint256& hash);
+
     /** Attempts to obfuscate tx time through exponentially distributed emitting.
         Works assuming that a single interval is used.
         Variable intervals will result in privacy decrease.
@@ -357,6 +379,7 @@ private:
     void SocketHandler();
     void ThreadSocketHandler();
     void ThreadDNSAddressSeed();
+    void ThreadDandelionShuffle();
 
     uint64_t CalculateKeyedNetGroup(const CAddress& ad) const;
 
@@ -419,6 +442,18 @@ private:
     std::atomic<NodeId> nLastNodeId{0};
     unsigned int nPrevNodeCount{0};
 
+    // Dandelion fields
+    std::vector<CNode*> vDandelionInbound;
+    std::vector<CNode*> vDandelionOutbound;
+    std::vector<CNode*> vDandelionDestination;
+    CNode* localDandelionDestination = nullptr;
+    std::map<CNode*, CNode*> mDandelionRoutes;
+    // Dandelion helper functions
+    CNode* SelectFromDandelionDestinations() const;
+    void CloseDandelionConnections(const CNode* const pnode);
+    std::string GetDandelionRoutingDataDebugString() const;
+    void DandelionShuffle();
+
     /**
      * Services this instance offers.
      *
@@ -470,6 +505,7 @@ private:
     std::thread threadOpenAddedConnections;
     std::thread threadOpenConnections;
     std::thread threadMessageHandler;
+    std::thread threadDandelionShuffle;
 
     /** flag for deciding to connect to an extra outbound peer,
      *  in excess of m_max_outbound_full_relay
@@ -781,6 +817,8 @@ public:
     CSemaphoreGrant grantOutbound;
     std::atomic<int> nRefCount{0};
 
+    bool fSupportsDandelion = false;
+
     const uint64_t nKeyedNetGroup;
     std::atomic_bool fPauseRecv{false};
     std::atomic_bool fPauseSend{false};
@@ -820,9 +858,13 @@ public:
 
         mutable RecursiveMutex cs_tx_inventory;
         CRollingBloomFilter filterInventoryKnown GUARDED_BY(cs_tx_inventory){50000, 0.000001};
+        // Set of Dandelion transactions that should be known to this peer
+        std::set<uint256> setDandelionInventoryKnown;
         // Set of transaction ids we still have to announce.
         // They are sorted by the mempool before relay, so the order is not important.
         std::set<uint256> setInventoryTxToSend;
+        // List of Dandelion transaction ids to announce.
+        std::vector<uint256> vInventoryDandelionTxToSend;
         // Used for BIP35 mempool sending
         bool fSendMempool GUARDED_BY(cs_tx_inventory){false};
         // Last time a "MEMPOOL" request was serviced.
@@ -983,6 +1025,10 @@ public:
             LOCK(m_tx_relay->cs_tx_inventory);
             if (!m_tx_relay->filterInventoryKnown.contains(inv.hash)) {
                 m_tx_relay->setInventoryTxToSend.insert(inv.hash);
+            }
+        } else if (inv.type == MSG_DANDELION_TX) {
+            if (setDandelionInventoryKnown.count(inv.hash)==0) {
+                vInventoryDandelionTxToSend.push_back(inv.hash);
             }
         } else if (inv.type == MSG_BLOCK) {
             LOCK(cs_inventory);

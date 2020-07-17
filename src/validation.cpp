@@ -127,6 +127,7 @@ CFeeRate minRelayTxFee = CFeeRate(DEFAULT_MIN_RELAY_TX_FEE);
 
 CBlockPolicyEstimator feeEstimator;
 CTxMemPool mempool(&feeEstimator);
+CTxMemPool stempool(&feeEstimator);
 
 // Internal stuff
 namespace {
@@ -362,12 +363,16 @@ static void UpdateMempoolForReorg(DisconnectedBlockTransactions& disconnectpool,
     while (it != disconnectpool.queuedTx.get<insertion_order>().rend()) {
         // ignore validation errors in resurrected transactions
         TxValidationState stateDummy;
-        if (!fAddToMempool || (*it)->IsCoinBase() ||
-            !AcceptToMemoryPool(mempool, stateDummy, *it,
-                                nullptr /* plTxnReplaced */, true /* bypass_limits */, 0 /* nAbsurdFee */)) {
+
+        bool ret = !AcceptToMemoryPool(mempool, stateDummy, *it, nullptr, nullptr, true, 0);
+        TxValidationState dandelionStateDummy;
+        AcceptToMemoryPool(stempool, dandelionStateDummy, *it, nullptr, nullptr, true, 0);
+        if (!fAddToMempool || (*it)->IsCoinBase() || ret) {
             // If the transaction doesn't make it in to the mempool, remove any
             // transactions that depend on it (which would now be orphans).
             mempool.removeRecursive(**it, MemPoolRemovalReason::REORG);
+            // Changes to mempool should also be made to Dandelion stempool
+            stempool.removeRecursive(**it, MemPoolRemovalReason::REORG);
         } else if (mempool.exists((*it)->GetHash())) {
             vHashUpdate.push_back((*it)->GetHash());
         }
@@ -380,11 +385,17 @@ static void UpdateMempoolForReorg(DisconnectedBlockTransactions& disconnectpool,
     // UpdateTransactionsFromBlock finds descendants of any transactions in
     // the disconnectpool that were added back and cleans up the mempool state.
     mempool.UpdateTransactionsFromBlock(vHashUpdate);
+    // Changes to mempool should also be made to Dandelion stempool
+    stempool.UpdateTransactionsFromBlock(vHashUpdate);
 
     // We also need to remove any now-immature transactions
     mempool.removeForReorg(&::ChainstateActive().CoinsTip(), ::ChainActive().Tip()->nHeight + 1, STANDARD_LOCKTIME_VERIFY_FLAGS);
+    // Changes to mempool should also be made to Dandelion stempool
+    stempool.removeForReorg(&::ChainstateActive().CoinsTip(), ::ChainActive().Tip()->nHeight + 1, STANDARD_LOCKTIME_VERIFY_FLAGS);
     // Re-limit mempool size, in case we added any transactions
     LimitMempoolSize(mempool, gArgs.GetArg("-maxmempool", DEFAULT_MAX_MEMPOOL_SIZE) * 1000000, std::chrono::hours{gArgs.GetArg("-mempoolexpiry", DEFAULT_MEMPOOL_EXPIRY)});
+    // Changes to mempool should also be made to Dandelion stempool
+    LimitMempoolSize(stempool, gArgs.GetArg("-maxmempool", DEFAULT_MAX_MEMPOOL_SIZE) * 1000000,  std::chrono::hours{gArgs.GetArg("-mempoolexpiry", DEFAULT_MEMPOOL_EXPIRY)});
 }
 
 // Used to avoid mempool polluting consensus critical paths if CCoinsViewMempool
@@ -1162,7 +1173,7 @@ bool ReadBlockFromDisk(CBlock& block, const CBlockIndex* pindex, const Consensus
         blockPos = pindex->GetBlockPos();
     }
 
-    if (!ReadBlockFromDisk(block, blockPos, pindex->nHeight, consensusParams))
+    if (!ReadBlockFromDisk(block, blockPos, consensusParams))
         return false;
     if (block.GetHash() != pindex->GetBlockHash())
         return error("ReadBlockFromDisk(CBlock&, CBlockIndex*): GetHash() doesn't match index for %s at %s",
@@ -2395,6 +2406,8 @@ void static UpdateTip(const CBlockIndex* pindexNew, const CChainParams& chainPar
 {
     // New best block
     mempool.AddTransactionsUpdated(1);
+    // Changes to mempool should also be made to Dandelion stempool
+    stempool.AddTransactionsUpdated(1);
 
     {
         LOCK(g_best_block_mutex);
@@ -2482,6 +2495,8 @@ bool CChainState::DisconnectTip(BlockValidationState& state, const CChainParams&
             // Drop the earliest entry, and remove its children from the mempool.
             auto it = disconnectpool->queuedTx.get<insertion_order>().begin();
             mempool.removeRecursive(**it, MemPoolRemovalReason::REORG);
+            // Changes to mempool should also be made to Dandelion stempool
+            stempool.removeRecursive(**it, MemPoolRemovalReason::REORG);
             disconnectpool->removeEntry(it);
         }
     }
@@ -2590,6 +2605,8 @@ bool CChainState::ConnectTip(BlockValidationState& state, const CChainParams& ch
     LogPrint(BCLog::BENCH, "  - Writing chainstate: %.2fms [%.2fs (%.2fms/blk)]\n", (nTime5 - nTime4) * MILLI, nTimeChainState * MICRO, nTimeChainState * MILLI / nBlocksTotal);
     // Remove conflicting transactions from the mempool.;
     mempool.removeForBlock(blockConnecting.vtx, pindexNew->nHeight);
+    // Changes to mempool should also be made to Dandelion stempool
+    stempool.removeForBlock(blockConnecting.vtx, pindexNew->nHeight);
     disconnectpool.removeForBlock(blockConnecting.vtx);
     // Update m_chain & related variables.
     m_chain.SetTip(pindexNew);
@@ -2758,6 +2775,7 @@ bool CChainState::ActivateBestChainStep(BlockValidationState& state, const CChai
         UpdateMempoolForReorg(disconnectpool, true);
     }
     mempool.check(&CoinsTip());
+    stempool.check(&CoinsTip());
 
     // Callbacks/notifications for a new best chain.
     if (fInvalidFound)
@@ -4552,6 +4570,7 @@ void UnloadBlockIndex()
     pindexBestInvalid = nullptr;
     pindexBestHeader = nullptr;
     mempool.clear();
+    stempool.clear();
     vinfoBlockFile.clear();
     nLastBlockFile = 0;
     setDirtyBlockIndex.clear();
@@ -4991,11 +5010,18 @@ bool LoadMempool(CTxMemPool& pool)
             CAmount amountdelta = nFeeDelta;
             if (amountdelta) {
                 pool.PrioritiseTransaction(tx->GetHash(), amountdelta);
+                stempool.PrioritiseTransaction(tx->GetHash(), amountdelta);
             }
             TxValidationState state;
             if (nTime + nExpiryTimeout > nNow) {
                 LOCK(cs_main);
+                int64_t nTimeCopy = nTime; // time isn't const, need copy for Dandelion
                 AcceptToMemoryPoolWithTime(chainparams, pool, state, tx, nTime,
+                                           nullptr /* plTxnReplaced */, false /* bypass_limits */, 0 /* nAbsurdFee */,
+                                           false /* test_accept */);
+                // Changes to mempool should also be made to Dandelion stempool
+                TxValidationState dummyState;
+                AcceptToMemoryPoolWithTime(chainparams, stempool, dummyState, tx, nullptr /* pfMissingInputs */, nTimeCopy,
                                            nullptr /* plTxnReplaced */, false /* bypass_limits */, 0 /* nAbsurdFee */,
                                            false /* test_accept */);
                 if (state.IsValid()) {
@@ -5022,6 +5048,7 @@ bool LoadMempool(CTxMemPool& pool)
 
         for (const auto& i : mapDeltas) {
             pool.PrioritiseTransaction(i.first, i.second);
+            stempool.PrioritiseTransaction(i.first, i.second);
         }
     } catch (const std::exception& e) {
         LogPrintf("Failed to deserialize mempool data on disk: %s. Continuing anyway.\n", e.what());

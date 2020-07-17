@@ -38,18 +38,35 @@ TransactionError BroadcastTransaction(NodeContext& node, const CTransactionRef t
     if (!node.mempool->exists(hashTx)) {
         // Transaction is not already in the mempool. Submit it.
         TxValidationState state;
-        if (!AcceptToMemoryPool(*node.mempool, state, std::move(tx),
-                nullptr /* plTxnReplaced */, false /* bypass_limits */, max_tx_fee)) {
-            err_string = state.ToString();
-            if (state.IsInvalid()) {
-                if (state.GetResult() == TxValidationResult::TX_MISSING_INPUTS) {
-                    return TransactionError::MISSING_INPUTS;
+        TxValidationState dummyState;
+        if(gArgs.GetBoolArg("-dandelion", false)){
+            if (!AcceptToMemoryPool(stempool, state, std::move(tx),
+                    nullptr /* plTxnReplaced */, false /* bypass_limits */, max_tx_fee)) {
+                err_string = state.ToString();
+                if (state.IsInvalid()) {
+                    if (state.GetResult() == TxValidationResult::TX_MISSING_INPUTS) {
+                        return TransactionError::MISSING_INPUTS;
+                    }
+                    return TransactionError::MEMPOOL_REJECTED;
+                } else {
+                    return TransactionError::MEMPOOL_ERROR;
                 }
-                return TransactionError::MEMPOOL_REJECTED;
-            } else {
-                return TransactionError::MEMPOOL_ERROR;
+            }
+        } else {
+            if (!AcceptToMemoryPool(*node.mempool, state, std::move(tx), nullptr /* plTxnReplaced */, false /* bypass_limits */, max_tx_fee)
+                    || !AcceptToMemoryPool(stempool, dummyState, std::move(tx), nullptr , false , max_tx_fee)) {
+                err_string = state.ToString();
+                if (state.IsInvalid()) {
+                    if (state.GetResult() == TxValidationResult::TX_MISSING_INPUTS) {
+                        return TransactionError::MISSING_INPUTS;
+                    }
+                    return TransactionError::MEMPOOL_REJECTED;
+                } else {
+                    return TransactionError::MEMPOOL_ERROR;
+                }
             }
         }
+
 
         // Transaction was accepted to the mempool.
 
